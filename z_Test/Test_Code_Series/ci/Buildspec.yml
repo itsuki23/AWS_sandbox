@@ -1,0 +1,50 @@
+version: 0.2
+
+phases:
+  install:
+    runtime-versions:
+      docker: 18
+  pre_build:
+    commands:
+    - $(aws ecr get-login --region $AWS_DEFAULT_REGION --no-include-email)
+    - REPO=$(aws ecr describe-repositories --repository-names main --output text --query "repositories[0].repositoryUri")
+    - IMAGE=$REPO:latest
+  build:
+    commands:
+    - docker build -t $IMAGE .
+    - docker push $IMAGE
+  post_build:
+    commands:
+    - printf '[{"name":"main","imageUri":"%s"}]' $IMAGE > imagedefinitions.json
+artifacts:
+  files: imageefinitions.json
+
+
+############################################################
+# Variable
+############################################################
+
+# ${ECR_URI} 
+# CodeBuildの環境変数に自分で設定
+
+# ${CODEBUILD_RESOLVED_SOURCE_VERSION}
+# CodeBuildソースがGitリポジトリの場合に自動的に設定される環境変数
+# ソースコードリポジトリのコミットIDが格納される
+
+
+# イメージ定義ファイル(imagedefinitions.json)の作成
+# ECSのタスク定義中のコンテナとECRのURIをマッピングする
+
+############################################################
+---
+build:
+  commands:
+    - REPOSITORY_URI=${ECR_URI}
+    - IMAGE_TAG=${CODEBUILD_RESOLVED_SOURCE_VERSION}
+    - docker build -t $REPOSITORY_URI:$IMAGE_TAG
+post_build:
+  commands:
+    - docker push $REPOSITORY_URI:$IMAGE_TAG
+    - echo "[{\"name\":\"${CONTAINER_NAME}\",\"imageUri\":\"${REPOSITORY_URI}:${IMAGE_TAG}\"}]" > imagedefinitions.json
+artifacts:
+  files: imagedefinitions.json
